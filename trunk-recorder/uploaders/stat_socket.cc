@@ -173,9 +173,9 @@ void stat_socket::send_calls_active(std::vector<Call *>calls) {
 
   for (std::vector<Call *>::iterator it = calls.begin(); it != calls.end(); it++) {
     Call *call         = *it;
-    if (call->get_state() == recording) {
+    // if (call->get_state() == recording) {
       node.push_back(std::make_pair("", call->get_stats()));
-    }
+    // }
   }
 
   send_object(node, "calls", "calls_active");
