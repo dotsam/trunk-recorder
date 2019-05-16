@@ -25,6 +25,7 @@
 #define OSW_TY1_ALERT           0x0318
 #define OSW_TY1_EMERGENCY       0x0319
 #define OSW_TY2_CALL_ALERT      0x0319
+#define OSW_SECOND_NORMAL       0x0320
 #define OSW_FIRST_ASTRO         0x0321
 #define OSW_SYSTEM_CLOCK        0x0322
 #define OSW_SCAN_MARKER         0x032b
@@ -46,18 +47,12 @@ struct osw_stru{
 
 class SmartnetParser:public TrunkParser
 {
-	int lastcmd;
-	long lastaddress;
 public:
-
-
 	struct osw_stru stack[5];
 	short numStacked;
 	short numConsumed;
 	SmartnetParser();
-	double getfreq(int cmd, System *system);
-	void print_osw(std::string s);
-	bool is_chan(int cmd, System *system);
-	std::vector<TrunkMessage> parse_message(std::string s, System *system);
+	double getfreq(int cmd, System *sys);
+	std::vector<TrunkMessage> parse_message(std::string s, System *sys);
 };
 #endif
