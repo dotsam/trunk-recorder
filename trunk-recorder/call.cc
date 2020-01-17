@@ -18,12 +18,12 @@ void Call::create_filename() {
   boost::filesystem::create_directories(path_stream.str());
 
   int nchars;
-  nchars = snprintf(filename,   255,        "%s/%ld-%ld_%f.wav",  path_stream.str().c_str(), talkgroup, start_time, curr_freq);
+  nchars = snprintf(filename,   255,        "%s/%ld-%ld_%.0f.wav",  path_stream.str().c_str(), talkgroup, start_time, curr_freq);
 
   if (nchars >= 255) {
     BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
   }
-  nchars = snprintf(status_filename,  255,  "%s/%ld-%ld_%f.json", path_stream.str().c_str(), talkgroup, start_time, curr_freq);
+  nchars = snprintf(status_filename,  255,  "%s/%ld-%ld_%.0f.json", path_stream.str().c_str(), talkgroup, start_time, curr_freq);
 
   if (nchars >= 255) {
     BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
@@ -34,12 +34,12 @@ void Call::create_filename() {
     BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
   }
 
-  nchars = snprintf(debug_filename,   255,        "%s/%ld-%ld_%f.debug",  path_stream.str().c_str(), talkgroup, start_time, curr_freq);
+  nchars = snprintf(debug_filename,   255,        "%s/%ld-%ld_%.0f.debug",  path_stream.str().c_str(), talkgroup, start_time, curr_freq);
   if (nchars >= 255) {
     BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
   }
 
-  nchars = snprintf(sigmf_filename,   255,        "%s/%ld-%ld_%f.raw",  path_stream.str().c_str(), talkgroup, start_time, curr_freq);
+  nchars = snprintf(sigmf_filename,   255,        "%s/%ld-%ld_%.0f.raw",  path_stream.str().c_str(), talkgroup, start_time, curr_freq);
   if (nchars >= 255) {
     BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
   }
@@ -223,7 +223,7 @@ Recorder * Call::get_debug_recorder() {
 
 void Call::set_recorder(Recorder *r) {
   recorder = r;
-  BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tTG: " << this->get_talkgroup_display() << "\tFreq: " <<  FormatFreq(this->get_freq()) << "\tStarting Recorder on Src: " << recorder->get_source()->get_device();
+  BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tTG: " << this->get_talkgroup_display() << "\tFreq: " <<  FormatFreq(this->get_freq()) << "\t\u001b[32mStarting Recorder on Src: " << recorder->get_source()->get_device() << "\u001b[0m";
 }
 
 Recorder * Call::get_recorder() {
@@ -484,13 +484,15 @@ void Call::update_talkgroup_display(){
     talkgroup_tag = "-";
   }
 
+  char formattedTalkgroup[42];
   if (this->sys->get_talkgroup_display_format() == System::talkGroupDisplayFormat_id_tag) {
-    talkgroup_display = boost::lexical_cast<std::string>(talkgroup).append(" (").append(talkgroup_tag).append(")");
+    snprintf(formattedTalkgroup, 41, "%10ld (%23s)", talkgroup, talkgroup_tag.c_str());
   } else if (this->sys->get_talkgroup_display_format() == System::talkGroupDisplayFormat_tag_id) {
-    talkgroup_display = std::string("").append(talkgroup_tag).append(" (").append(boost::lexical_cast<std::string>(talkgroup)).append(")");
-  } else{
-    talkgroup_display = boost::lexical_cast<std::string>(talkgroup);
+    snprintf(formattedTalkgroup, 41, "%23s (%10ld)", talkgroup_tag.c_str(), talkgroup);
+  } else {
+    snprintf(formattedTalkgroup, 41, "%10ld", talkgroup);
   }
+  talkgroup_display = boost::lexical_cast<std::string>(formattedTalkgroup);
 }
 
 boost::property_tree::ptree Call::get_stats()
