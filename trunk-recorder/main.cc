@@ -132,6 +132,39 @@ std::vector<float>design_filter(double interpolation, double deci) {
   return result;
 }
 
+void set_logging_level(std::string log_level)
+{
+    boost::log::trivial::severity_level sev_level = boost::log::trivial::info;
+
+    if (log_level == "trace")
+        sev_level = boost::log::trivial::trace;
+    else if (log_level == "debug")
+        sev_level = boost::log::trivial::debug;
+    else if (log_level == "info")
+        sev_level = boost::log::trivial::info;
+    else if (log_level == "warning")
+        sev_level = boost::log::trivial::warning;
+    else if (log_level == "error")
+        sev_level = boost::log::trivial::error;
+    else if (log_level == "fatal")
+        sev_level = boost::log::trivial::fatal;
+    else
+    {
+        BOOST_LOG_TRIVIAL(error) << "set_logging_level: Unknown logging level: " << log_level;
+        return;
+    }
+
+    logging::core::get()->set_filter
+    (
+        logging::trivial::severity >= sev_level
+
+    );
+
+    boost::log::core::get()->set_filter(
+        boost::log::trivial::severity >= sev_level
+    );
+}
+
 /**
  * Method name: load_config()
  * Description: <#description#>
@@ -141,6 +174,7 @@ void load_config(string config_file)
 {
   string system_modulation;
   int    sys_count = 0;
+  int    source_count = 0;
 
   try
   {
@@ -148,8 +182,13 @@ void load_config(string config_file)
 
     boost::property_tree::ptree pt;
     boost::property_tree::read_json(config_file, pt);
-
+    BOOST_LOG_TRIVIAL(info) << "\n-------------------------------------\n     Trunk Recorder\n-------------------------------------\n" << sys_count;
     BOOST_LOG_TRIVIAL(info) << "\n-------------------------------------\nSYSTEMS\n-------------------------------------\n" << sys_count;
+    
+    config.debug_recorder   = pt.get<bool>("debugRecorder", 0);
+    config.debug_recorder_address = pt.get<std::string>("debugRecorderAddress", "127.0.0.1");
+    config.debug_recorder_port = pt.get<int>("debugRecorderPort", 1234);
+    
     BOOST_FOREACH(boost::property_tree::ptree::value_type  & node,
                   pt.get_child("systems"))
     {
@@ -253,6 +292,8 @@ void load_config(string config_file)
       BOOST_LOG_TRIVIAL(info) << "Decode FSync: " << system->get_fsync_enabled();
       system->set_star_enabled(node.second.get<bool>("decodeStar", false));
       BOOST_LOG_TRIVIAL(info) << "Decode Star: " << system->get_star_enabled();
+      system->set_tps_enabled(node.second.get<bool>("decodeTPS", false));
+      BOOST_LOG_TRIVIAL(info) << "Decode TPS: " << system->get_tps_enabled();
       std::string talkgroup_display_format_string = node.second.get<std::string>("talkgroupDisplayFormat", "Id");
       if (boost::iequals(talkgroup_display_format_string, "id_tag")){
         system->set_talkgroup_display_format(System::talkGroupDisplayFormat_id_tag);
@@ -297,6 +338,8 @@ void load_config(string config_file)
       system->set_min_duration(node.second.get<double>("minDuration", 0));
       BOOST_LOG_TRIVIAL(info) << "Minimum Call Duration (in seconds): " << system->get_min_duration();
 
+
+
       systems.push_back(system);
       BOOST_LOG_TRIVIAL(info);
     }
@@ -327,7 +370,6 @@ void load_config(string config_file)
 
       std::string antenna   = node.second.get<string>("antenna", "");
       int digital_recorders = node.second.get<int>("digitalRecorders", 0);
-      int debug_recorders   = node.second.get<int>("debugRecorders", 0);
       int sigmf_recorders   = node.second.get<int>("sigmfRecorders", 0);
       int analog_recorders  = node.second.get<int>("analogRecorders", 0);
 
@@ -355,10 +397,9 @@ void load_config(string config_file)
       BOOST_LOG_TRIVIAL(info) << "Squelch: " << node.second.get<double>("squelch", 0);
       BOOST_LOG_TRIVIAL(info) << "Idle Silence: " << node.second.get<bool>("idleSilence", 0);
       BOOST_LOG_TRIVIAL(info) << "Digital Recorders: " << node.second.get<int>("digitalRecorders", 0);
-      BOOST_LOG_TRIVIAL(info) << "Debug Recorders: " << node.second.get<int>("debugRecorders",  0);
+      BOOST_LOG_TRIVIAL(info) << "Debug Recorder: " << node.second.get<bool>("debugRecorder",  0);
       BOOST_LOG_TRIVIAL(info) << "SigMF Recorders: " << node.second.get<int>("sigmfRecorders",  0); 
       BOOST_LOG_TRIVIAL(info) << "Analog Recorders: " << node.second.get<int>("analogRecorders",  0);
-
 
       boost::optional<std::string> mod_exists = node.second.get_optional<std::string>("modulation");
 
@@ -451,8 +492,11 @@ void load_config(string config_file)
       source->create_digital_recorders(tb, digital_recorders);
       source->create_analog_recorders(tb, analog_recorders);
       source->create_sigmf_recorders(tb, sigmf_recorders);
-      source->create_debug_recorders(tb, debug_recorders);
+      if (config.debug_recorder) {
+        source->create_debug_recorder(tb, source_count);
+      }
       sources.push_back(source);
+      source_count++;
       BOOST_LOG_TRIVIAL(info) <<  "\n-------------------------------------\n\n";
     }
 
@@ -499,10 +543,24 @@ void load_config(string config_file)
 
     statusAsString = pt.get<bool>("statusAsString", statusAsString);
     BOOST_LOG_TRIVIAL(info) << "Status as String: " << statusAsString;
+    std::string log_level = pt.get<std::string>("logLevel", "info");
+    BOOST_LOG_TRIVIAL(info) << "Log Level: " << log_level;
+    set_logging_level(log_level);
   }
   catch (std::exception const& e)
   {
     BOOST_LOG_TRIVIAL(error) << "Failed parsing Config: " << e.what();
+    exit(0);
+  }
+  if (config.debug_recorder) {
+      BOOST_LOG_TRIVIAL(info) << "\n\n-------------------------------------\nDEBUG RECORDER\n-------------------------------------\n";
+       BOOST_LOG_TRIVIAL(info) << "  Address: " << config.debug_recorder_address;
+
+      for (vector<Source *>::iterator it = sources.begin(); it != sources.end(); it++) {
+        Source *source = *it;
+        BOOST_LOG_TRIVIAL(info) << "  " << source->get_driver() << " - " << source->get_device() << " [ " << FormatFreq(source->get_center()) << " ]  Port: " << source->get_debug_recorder_port();
+      }
+       BOOST_LOG_TRIVIAL(info) << "\n\n-------------------------------------\n";
   }
 }
 
@@ -646,6 +704,22 @@ bool start_recorder(Call *call, TrunkMessage message, System *sys) {
   return false;
 }
 
+void process_message_queues() {
+    for (std::vector<System*>::iterator it = systems.begin(); it != systems.end(); ++it) {
+        System* sys = (System*)*it;
+
+        for (std::vector<analog_recorder_sptr>::iterator arit = sys->conventional_recorders.begin(); arit != sys->conventional_recorders.end(); ++arit) {
+            analog_recorder_sptr ar = (analog_recorder_sptr)*arit;
+            ar->process_message_queues();
+        }
+
+        for (std::vector<p25conventional_recorder_sptr>::iterator pit = sys->conventionalP25_recorders.begin(); pit != sys->conventionalP25_recorders.end(); ++pit) {
+            p25conventional_recorder_sptr pr = (p25conventional_recorder_sptr)*pit;
+            pr->process_message_queues();
+        }
+    }
+}
+
 void stop_inactive_recorders() {
   bool ended_recording = false;
 
@@ -695,8 +769,6 @@ void stop_inactive_recorders() {
         ++it;
       } // if rx is active
     }   // foreach loggers
-
-
   }
 
 
@@ -766,8 +838,7 @@ bool retune_recorder(TrunkMessage message, Call *call) {
       }
       return true;
     } else {
-      BOOST_LOG_TRIVIAL(info) << "\t - Retune failed, New Freq out of range for Source: " << source->get_device();
-      BOOST_LOG_TRIVIAL(info) << "\t - Starting a new recording using a new source";
+      //Couldn't find a source that covers it
       return false;
     }
   }
@@ -800,58 +871,64 @@ void handle_call(TrunkMessage message, System *sys) {
   bool call_found        = false;
   bool call_retune       = false;
   bool recording_started = false;
+  bool retune_failed     = false;
+
+
+/* Notes: it is possible for 2 Calls to exist for the same talkgroup on different freq. This happens when a Talkgroup starts on a freq
+  that current recorder can't retune to. In this case, the current orig Talkgroup reocrder will keep going on the old freq, while a new 
+  recorder is start on a source that can cover that freq. This makes sure any of the remaining transmission that it is in the buffer
+  of the original recorder gets flushed. */ 
 
   for (vector<Call *>::iterator it = calls.begin(); it != calls.end();) {
     Call *call = *it;
 
-    // This should help detect 2 calls being listed for the same tg
-    if (call_found && (call->get_talkgroup() == message.talkgroup) && (call->get_sys_num() == message.sys_num)) {
-      BOOST_LOG_TRIVIAL(info) << "\tALERT! Update - Total calls: " <<  calls.size() << "\tTalkgroup: " << message.talkgroup << "\tOld Freq: " <<  call->get_freq() << "\tNew Freq: " << message.freq;
-    }
-
     if ((call->get_talkgroup() == message.talkgroup) && (call->get_sys_num() == message.sys_num)) {
       call_found = true;
 
+      // Check to make sure the Freq and TDMA info match up with what is being currenty recorded
       if ((call->get_freq() != message.freq) || (call->get_tdma_slot() != message.tdma_slot) || (call->get_phase2_tdma() != message.phase2_tdma)) {
         if (call->get_state() == recording) {
-          // see if we can retune the recorder, sometimes you can't if there are
-          // more than one
-          BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tTG: " << call->get_talkgroup_display() << "\tFreq: " << FormatFreq(call->get_freq()) << "\tUpdate Retuning - New Freq: " << FormatFreq(message.freq) << "\tElapsed: " << call->elapsed() << "s \tSince update: " << call->since_last_update() << "s";
+          // see if we can retune the recorder, You may not be able to if the Freq is beyond what the current source can handle
           int retuned = retune_recorder(message, call);
 
           if (!retuned) {
-            Recorder * recorder = call->get_recorder();
-            call->end_call();
-            stats.send_call_end(call);
-            it = calls.erase(it);
-            delete call;
+            // we want to keep this call recordering, and now start a recording of the new call on another recorder
             call_found = false;
-            stats.send_recorder(recorder);
+            retune_failed = true;
+            ++it; // go on to the next call, remember there maybe two calls
           } else {
+            // if you did retune, update the call info
+            BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tTG: " << call->get_talkgroup_display() << "\tFreq: " << FormatFreq(call->get_freq()) << "\tUpdate Retuning - New Freq: " << FormatFreq(message.freq) << "\tElapsed: " << call->elapsed() << "s \tSince update: " << call->since_last_update() << "s";
             call->update(message);
             call_retune = true;
+            break;
           }
         } else {
-          // the Call is not recording, update and continue
+          // the Call is not being recorded, simply update and continue
           call->set_freq(message.freq);
           call->set_phase2_tdma(message.phase2_tdma);
           call->set_tdma_slot(message.tdma_slot);
           call->update(message);
+          break;
         }
       } else {
-        call->update(message);
-      }
 
-      // we found out call, exit the for loop
-      break;
+        // everything about the current recording matches, simply update the info
+        call->update(message);
+        break;
+      }
     } else {
       ++it;
-
-      // the talkgroups don't match
+      // the talkgroup for the call being looked at doesn't match, look at the next one.
     }
   }
 
+
+
   if (!call_found) {
+    if (retune_failed) {
+      BOOST_LOG_TRIVIAL(info) << "\t - Retune failed, starting a new recording using a new source";
+    }
     Call *call = new Call(message, sys, config);
     recording_started = start_recorder(call, message, sys);
     calls.push_back(call);
@@ -1047,6 +1124,8 @@ void monitor_messages() {
       printf("\n Signal caught!\n");
       return;
     }
+
+    process_message_queues();
 
     if (config.status_server != "") {
       stats.poll_one();

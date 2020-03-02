@@ -27,7 +27,6 @@
 
 #include <gnuradio/analog/sig_source_c.h>
 #include <gnuradio/analog/pwr_squelch_cc.h>
-#include <gnuradio/analog/pwr_squelch_ff.h>
 #include <gnuradio/analog/feedforward_agc_cc.h>
 #include <gnuradio/analog/pll_freqdet_cf.h>
 #include <gnuradio/digital/diff_phasor_cc.h>
@@ -55,7 +54,6 @@
 #include "recorder.h"
 #include "../config.h"
 #include <gr_blocks/nonstop_wavfile_sink.h>
-#include <gr_blocks/freq_xlating_fft_filter.h>
 
 
 class Source;
@@ -119,7 +117,6 @@ protected:
   bool   qpsk_mod;
 
   gr::op25_repeater::p25_frame_assembler::sptr op25_frame_assembler;
-  freq_xlating_fft_filter_sptr prefilter;
   gr::blocks::nonstop_wavfile_sink::sptr wav_sink;
   gr::blocks::copy::sptr valve;
   //gr::blocks::multiply_const_ss::sptr levels;
